@@ -1,0 +1,31 @@
+{
+  "name": "node-red-contrib-atgpio",
+  "node-red": {
+    "nodes": {
+      "at-gpio": "at-gpio.js"
+    }
+  },
+  "version": "1.0.6",
+  "description": "Node-Red Advantech IIoT GPIO Nodes",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "GPIO", "Advantech", "IIoT"
+  ],
+  "dependencies": {
+    "node-atgpio": "^0.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Advantech-IIoT/node-red-contrib-atgpio"
+  },
+  "author": "Zhirong.Hsu",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "eslint": "^3.19.0",
+    "eslint-config-airbnb-base": "^11.2.0",
+    "eslint-plugin-import": "^2.7.0"
+  }
+}

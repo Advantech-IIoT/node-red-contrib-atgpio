@@ -1,0 +1,289 @@
+<!--
+  Copyright 2017 Advantech Corp.
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<script type="text/x-red" data-template-name="atgpio info">
+    <div class="form-row">
+        <label for="node-input-rate"><i class="fa fa-clock-o"></i> Poll Rate </label>
+        <input type="number" id="node-input-rate" placeholder="1-65535" style="max-width:120px">
+        <select id="node-input-rateUnit" style="max-width:160px">
+            <option value="ms">millisecond(s)</option>
+            <option value="s">second(s)</option>
+            <option value="m">minute(s)</option>
+            <option value="h">hour(s)</option>
+         </select>
+    </div>
+    <br/>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]common.label.name">
+    </div>
+</script>
+
+<script type="text/x-red" data-help-name="atgpio info">
+    <p>GPIO information node. Generates a <code>msg.payload</code>in JSON format including Pin, Mode(In/Out), Value(High/Low) of each GPIO pin.</p>
+    <p>Setup a polling rate (greater than zero) and the time unit.</p>
+    <p>Requires the atgpio driver and NodeJs library in order to work.</p>
+    <p><b>Note:</b> we are using the actual physical pin numbers (starts from 0) on connector as they are easier to locate.</p>
+</script>
+
+<script type="text/javascript">
+    var pinsInUse = {};
+    RED.nodes.registerType('atgpio info',{
+        category: 'Advantech_IIoT',
+        color:"#c6dbef",
+        defaults: {
+            name: { value:"" },
+            rate: {
+            	value: "1", required: true, validate: function (v) {
+            		return v > 0;
+            	}
+            },
+            rateUnit: {
+            	value: "s", required: true, validate: function (v) {
+            		return "ms" == v || "s" == v || "m" == v || "h" == v;
+            	}
+            },
+        },
+        inputs:1,
+        outputs:1,
+        icon: "arrow-in.png",
+        align: "right",
+        paletteLabel: "GPIO Info",
+        label: function() {
+            return this.name || "GPIO Info" ;
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="atgpio in">
+    <div class="form-row">
+        <label for="node-input-pin"><i class="fa fa-circle"></i> <span data-i18n="at-gpio.label.gpiopin"></span></label>
+        <select type="text" id="node-input-pin" style="width: 250px;">
+            <option value='' disabled selected style='display:none;'><span data-i18n="at-gpio.label.selectpin"></span></option>
+         </select>
+    </div>
+    <div class="form-row">
+		<label for="node-input-rate"><i class="fa fa-clock-o"></i> Poll Rate </label>
+		<input type="number" id="node-input-rate" placeholder="1-65535" style="max-width:120px">
+		<select id="node-input-rateUnit" style="max-width:160px">
+			<option value="ms">millisecond(s)</option>
+			<option value="s">second(s)</option>
+			<option value="m">minute(s)</option>
+			<option value="h">hour(s)</option>
+         </select>
+    </div>
+    <br/>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]common.label.name">
+    </div>
+    <div class="form-tips" id="pin-tip"><span data-i18n="[html]at-gpio.tip.pin"></span></div>
+</script>
+
+<script type="text/x-red" data-help-name="atgpio in">
+    <p>GPIO input node. Generates a <code>msg.payload</code> with either a
+    0 or 1 depending on the state of the input pin.</p>
+    <p>Setup a polling rate (greater than zero) and the time unit.</p>
+    <p>The <code>msg.topic</code> is set to <i>at-gpio/{the pin number}</i></p>
+    <p>Requires the atgpio driver and NodeJs library in order to work.</p>
+    <p><b>Note:</b> we are using the actual physical pin numbers (starts from 0) on connector as they are easier to locate.</p>
+</script>
+
+<script type="text/javascript">
+    var pinsInUse = {};
+    RED.nodes.registerType('atgpio in',{
+        category: 'Advantech_IIoT',
+        color:"#c6dbef",
+        defaults: {
+            name: { value:"" },
+            pin: {
+            	value: "-1", required: true, validate: function (v) {
+            		return v >= 0;
+            	}
+            },
+            dir: { value:"in" },
+            rate: {
+            	value: "1", required: true, validate: function (v) {
+            		return v > 0;
+            	}
+            },
+            rateUnit: {
+            	value: "s", required: true, validate: function (v) {
+            		return "ms" == v || "s" == v || "m" == v || "h" == v;
+            	}
+            },
+        },
+        inputs:0,
+        outputs:1,
+        icon: "arrow-in.png",
+        info: function() {
+            if ( Object.keys(pinsInUse).length !== 0 ) {
+                return "**Pins in use** : "+Object.keys(pinsInUse);
+            }
+            else { return ""; }
+        },
+        paletteLabel: "GPIO input",
+        label: function() {
+            return this.name || "Pin: "+this.pin ;
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function() {
+            var pinnow = this.pin;
+            var pintip = this._("at-gpio.tip.pin");
+            var pinname = this._("at-gpio.pinname");
+            var alreadyuse = this._("at-gpio.alreadyuse");
+            $.getJSON('at-gpio/count/'+this.id,function(data) {
+                for(var i = 0; i < Number(data); i++)
+                    $('#node-input-pin').append($("<option></option>").attr("value",i).text(i));
+
+                $('#node-input-pin').val(pinnow);
+
+            });
+
+            $.getJSON('at-gpio/pins/'+this.id,function(data) {
+                pinsInUse = data || {};
+                $('#pin-tip').html(pintip + Object.keys(data));
+            });
+
+            $("#node-input-pin").change(function() {
+                var pinnew = $("#node-input-pin").val();
+                if ((pinnew) && (pinnew !== pinnow)) {
+                    if (pinsInUse.hasOwnProperty(pinnew)) {
+                        RED.notify(pinname+" "+pinnew+" "+alreadyuse,"warn");
+                    }
+                    pinnow = pinnew;
+                }
+            });
+
+
+        }
+    });
+</script>
+
+<script type="text/x-red" data-template-name="atgpio out">
+    <div class="form-row">
+        <label for="node-input-pin"><i class="fa fa-circle"></i> <span data-i18n="at-gpio.label.gpiopin"></span></label>
+        <select type="text" id="node-input-pin" style="width: 250px;">
+            <option value='' disabled selected style='display:none;'><span data-i18n="at-gpio.label.selectpin"></span></option>
+         </select>
+    </div>
+    <div class="form-row" id="node-set-tick">
+        <label>&nbsp;</label>
+        <input type="checkbox" id="node-input-set" style="display: inline-block; width: auto; vertical-align: top;">
+        <label for="node-input-set" style="width: 70%;"><span data-i18n="at-gpio.label.initpin"></span></label>
+    </div>
+    <div class="form-row" id="node-set-state">
+        <label for="node-input-level">&nbsp;</label>
+        <select id="node-input-level" style="width: 250px;">
+            <option value="0" data-i18n="at-gpio.initpin0"></option>
+            <option value="1" data-i18n="at-gpio.initpin1"></option>
+        </select>
+    </div>
+    <br/>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> <span data-i18n="common.label.name"></span></label>
+        <input type="text" id="node-input-name" data-i18n="[placeholder]common.label.name">
+    </div>
+    <div class="form-tips" id="pin-tip"><span data-i18n="[html]at-gpio.tip.pin"></span></div>
+</script>
+
+<script type="text/x-red" data-help-name="atgpio out">
+    <p>GPIO output node.</p>
+    <p>It expects a <code>msg.payload</code> with either a 0 or 1 (or true or false),
+    and will set the selected physical pin high or low depending on the value passed in.</p>
+    <p>The initial value of the pin at deploy time can also be set to 0 or 1.</p>
+    <p>Requires the atgpio driver and NodeJs library in order to work.</p>
+    <p><b>Note:</b> we are using the actual physical pin numbers (starts from 0) on connector as they are easier to locate.</p>
+</script>
+
+<script type="text/javascript">
+    var pinsInUse = {};
+    RED.nodes.registerType('atgpio out',{
+        category: 'Advantech_IIoT',
+        color:"#c6dbef",
+        defaults: {
+            name: { value:"" },
+            pin: {
+            	value: "-1", required: true, validate: function (v) {
+            		return v >= 0
+            	}
+            },
+            set: { value:"" },
+            level: { value:"0" },
+            dir: { value:"out" }
+        },
+        inputs:1,
+        outputs:0,
+        icon: "arrow-in.png",
+        info: function() {
+            if ( Object.keys(pinsInUse).length !== 0 ) {
+                return "**Pins in use** : "+Object.keys(pinsInUse);
+            }
+            else { return ""; }
+        },
+        align: "right",
+        paletteLabel: "GPIO output",
+        label: function() {
+            return this.name || "Pin: "+this.pin ;
+        },
+        labelStyle: function() {
+            return this.name?"node_label_italic":"";
+        },
+        oneditprepare: function() {
+            var pinnow = this.pin;
+            var pintip = this._("at-gpio.tip.pin");
+            var pinname = this._("at-gpio.pinname");
+            var alreadyuse = this._("at-gpio.alreadyuse");
+            $.getJSON('at-gpio/count/'+this.id,function(data) {
+                for(var i = 0; i < Number(data); i++)
+                    $('#node-input-pin').append($("<option></option>").attr("value",i).text(i));
+
+                $('#node-input-pin').val(pinnow);
+
+            });
+
+            $.getJSON('at-gpio/pins/'+this.id,function(data) {
+                pinsInUse = data || {};
+                $('#pin-tip').html(pintip + Object.keys(data));
+            });
+
+            $("#node-input-pin").change(function() {
+                var pinnew = $("#node-input-pin").val();
+                if ((pinnew) && (pinnew !== pinnow)) {
+                    if (pinsInUse.hasOwnProperty(pinnew)) {
+                        RED.notify(pinname+" "+pinnew+" "+alreadyuse,"warn");
+                    }
+                    pinnow = pinnew;
+                }
+            });
+            var setstate = function () {
+                if ($('#node-input-set').is(":checked")) {
+                    $("#node-set-state").show();
+                } else {
+                    $("#node-set-state").hide();
+                }
+            };
+            $("#node-input-set").change(function () { setstate(); });
+            setstate();
+
+
+        }
+    });
+</script>

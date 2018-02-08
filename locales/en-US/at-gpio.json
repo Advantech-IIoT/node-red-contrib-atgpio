@@ -1,0 +1,63 @@
+{
+    "common": {
+        "label": {
+            "payload": "Payload",
+            "topic": "Topic",
+            "name": "Name",
+            "username": "Username",
+            "password": "Password"
+        },
+        "status": {
+            "connected": "connected",
+            "not-connected": "not connected",
+            "disconnected": "disconnected",
+            "connecting": "connecting",
+            "error": "error",
+            "ok": "OK"
+        },
+        "notification": {
+            "error": "<strong>Error</strong>: __message__",
+            "errors": {
+                "not-deployed": "node not deployed",
+                "no-response": "no response from server",
+                "unexpected": "unexpected error (__status__) __message__"
+            }
+        },
+        "errors": {
+            "nooverride": "Warning: msg properties can no longer override set node properties. See bit.ly/nr-override-msg-props"
+        }
+    },
+    "at-gpio": {
+        "label": {
+            "gpiopin": "GPIO",
+            "selectpin": "select pin",
+            "readinitial": "Read initial state of pin on deploy/restart?",
+            "type": "Type",
+            "initpin": "Initialise pin state?"
+        },
+        "initpin0": "initial level of pin - low (0)",
+        "initpin1": "initial level of pin - high (1)",
+        "pinname": "Pin",
+        "alreadyuse": "already in use",
+        "alreadyset": "already set as",
+        "tip": {
+            "pin": "<b>Pins in Use</b>: "
+        },
+        "types": {
+            "output": "output",
+            "input": "input"
+        },
+        "status": {
+            "stopped": "stopped",
+            "closed": "closed",
+            "not-running": "not running"
+        },
+        "errors": {
+            "version": "Version command failed",
+            "alreadyset": "GPIO pin __pin__ already set as type: __type__",
+            "invalidpin": "Invalid GPIO pin",
+            "invalidinput": "Invalid input",
+            "error": "error: __error__"
+        }
+    }
+}
