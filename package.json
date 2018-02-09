@@ -5,7 +5,7 @@
       "at-gpio": "at-gpio.js"
     }
   },
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Node-Red Advantech IIoT GPIO Nodes",
   "main": "index.js",
   "scripts": {
