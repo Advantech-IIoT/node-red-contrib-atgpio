@@ -1,1 +1,399 @@
-const gpio=require("node-atgpio");module.exports=(t=>{function e(t){let e=1e3;switch(t.rateUnit){case"ms":e=t.rate;break;case"s":e=1e3*t.rate;break;case"m":e=6e4*t.rate;break;case"h":e=36e5*t.rate}return e}function i(){const t={count:s,gpios:[]};if(s>0)for(let e=0;e<s;e+=1){const i={};i.pin=e,i.mode=gpio.getmode(e)?"Input":"Output",i.value=gpio.read(e),t.gpios.push(i)}return t}const s=gpio.count(),o={},n={out:t._("at-gpio.types.output"),in:t._("at-gpio.types.input")};t.nodes.registerType("atgpio info",function(s){t.nodes.createNode(this,s),this.rate=s.rate,this.rateUnit=s.rateUnit;const o=this;let n=null;o.status({fill:"blue",shape:"dot",text:"Initiating....."}),o.status({fill:"blue",shape:"dot",text:"Polling....."}),o.send({payload:i()}),o.status({fill:"green",shape:"dot",text:"common.status.ok"}),null!=n&&(clearInterval(n),n=null),n||(n=setInterval(()=>{o.status({fill:"blue",shape:"dot",text:"Polling....."}),o.send({payload:i()}),o.status({fill:"green",shape:"dot",text:"common.status.ok"})},e(o))),o.on("input",()=>{o.status({fill:"blue",shape:"dot",text:"Polling....."}),o.send({payload:i()}),o.status({fill:"green",shape:"dot",text:"common.status.ok"})}),o.on("close",()=>{o.status({fill:"grey",shape:"ring",text:"at-gpio.status.closed"}),n&&clearInterval(n),n=null})}),t.nodes.registerType("atgpio in",function(i){t.nodes.createNode(this,i),this.pin=Number(i.pin||-1),this.dir=i.dir,this.rate=i.rate,this.rateUnit=i.rateUnit;const s=this;let a=null;if(s.status({fill:"blue",shape:"dot",text:"Initiating....."}),!(void 0!==s.pin&&s.pin>=0))return s.warn(`${t._("at-gpio.errors.invalidpin")}: ${s.pin}`),void s.status({fill:"red",shape:"dot",text:`${t._("at-gpio.errors.invalidpin")}: ${s.pin}`});if(Object.prototype.hasOwnProperty.call(o,s.pin)){if(o[this.pin]!==this.type){const e=t._("at-gpio.errors.alreadyset",{pin:this.pin,type:n[o[this.pin]]});return s.warn(e),void s.status({fill:"red",shape:"dot",text:e})}}else o[this.pin]=this.dir;gpio.setup(s.pin,gpio.INPUT),s.status({fill:"green",shape:"dot",text:"common.status.ok"}),null!=a&&(clearInterval(a),a=null),a||(a=setInterval(()=>{const t=gpio.read(s.pin);s.send({topic:`at-gpio/${s.pin}`,payload:Number(t)})},e(s))),s.on("close",()=>{s.status({fill:"grey",shape:"ring",text:"at-gpio.status.closed"}),delete o[s.pin],a&&clearInterval(a),a=null})}),t.nodes.registerType("atgpio out",function(e){t.nodes.createNode(this,e),this.pin=Number(e.pin||-1),this.dir=e.dir,this.set=e.set||!1,this.level=Number(e.level||0);const i=this;if(!(void 0!==i.pin&&i.pin>=0))return i.warn(`${t._("at-gpio.errors.invalidpin")}: ${i.pin}`),void i.status({fill:"red",shape:"dot",text:`${t._("at-gpio.errors.invalidpin")}: ${i.pin}`});if(Object.prototype.hasOwnProperty.call(o,i.pin)){if(o[this.pin]!==this.dir){const e=t._("at-gpio.errors.alreadyset",{pin:this.pin,type:n[o[this.pin]]});return i.warn(e),void i.status({fill:"red",shape:"dot",text:e})}}else o[this.pin]=this.dir;i.set?(gpio.setup(i.pin,gpio.OUTPUT,i.level),i.status({fill:"green",shape:"dot",text:String(i.level)})):(gpio.setup(i.pin,gpio.OUTPUT),i.status({fill:"green",shape:"dot",text:"common.status.ok"})),i.on("input",e=>{if(!e||!Object.prototype.hasOwnProperty.call(e,"payload"))return;if(null==e.payload)return i.status({fill:"red",shape:"dot",text:"payload error"}),void i.error("GPIOOutNode: Invalid msg.payload!");if(void 0===i.pin||i.pin<0)return;"true"===e.payload&&(e.payload=!0),"false"===e.payload&&(e.payload=!1);const s=Number(e.payload);if(s!==gpio.LOW&&s!==gpio.HIGH)return i.warn(`${t._("at-gpio.errors.invalidinput")}: ${s}`),void i.status({fill:"red",shape:"dot",text:`${t._("at-gpio.errors.invalidinput")}: ${s}`});t.settings.verbose&&i.log(`out: ${e.payload}`),gpio.write(i.pin,s),i.status({fill:"green",shape:"dot",text:s})}),i.on("close",()=>{i.status({fill:"grey",shape:"ring",text:"at-gpio.status.closed"}),void 0!==i.pin&&i.pin>=0&&delete o[i.pin]})}),t.httpAdmin.get("/at-gpio/count/:id",t.auth.needsPermission("at-gpio.read"),(t,e)=>{e.json(s)}),t.httpAdmin.get("/at-gpio/pins/:id",t.auth.needsPermission("at-gpio.read"),(t,e)=>{e.json(o)})});
+/**
+ * Copyright 2017 Advantech Corp.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ **/
+// require any external libraries we may need....
+const gpio = require('node-atgpio');
+
+module.exports = (RED) => {
+    const gpioCount = gpio.count();
+
+    const pinsInUse = {};
+    const pinTypes = {
+        out: RED._('at-gpio.types.output'),
+        in: RED._('at-gpio.types.input')
+    };
+
+    function calcRate(node) {
+        let rate = 1000;
+        switch (node.rateUnit) {
+        case 'ms':
+            rate = node.rate; // milliseconds
+            break;
+        case 's':
+            rate = node.rate * 1000; // seconds
+            break;
+        case 'm':
+            rate = node.rate * 60000; // minutes
+            break;
+        case 'h':
+            rate = node.rate * 3600000; // hours
+            break;
+        default:
+            break;
+        }
+        return rate;
+    }
+
+    function GetGPIOInfo() {
+        const info = {
+            count: gpioCount,
+            gpios: []
+        };
+        if (gpioCount > 0) {
+            for (let i = 0; i < gpioCount; i += 1) {
+                const io = {};
+                io.pin = i;
+                io.mode = gpio.getmode(i) ? 'Input' : 'Output';
+                io.value = gpio.read(i);
+                info.gpios.push(io);
+            }
+        }
+        return info;
+    }
+    // The main node definition - most things happen in here
+
+    function GPIOInfoNode(n) {
+        // Create a RED node
+        RED.nodes.createNode(this, n);
+        this.rate = n.rate;
+        this.rateUnit = n.rateUnit;
+
+        // copy "this" object in case we need it in context of callbacks of other functions.
+        const node = this;
+        let timerID = null;
+        node.status({
+            fill: 'blue',
+            shape: 'dot',
+            text: 'Initiating.....'
+        });
+        node.status({
+            fill: 'blue',
+            shape: 'dot',
+            text: 'Polling.....'
+        });
+        node.send({
+            payload: GetGPIOInfo()
+        });
+        node.status({
+            fill: 'green',
+            shape: 'dot',
+            text: 'common.status.ok'
+        });
+
+        if (timerID != null) {
+            clearInterval(timerID);
+            timerID = null;
+        }
+        if (!timerID) {
+            timerID = setInterval(() => {
+                node.status({
+                    fill: 'blue',
+                    shape: 'dot',
+                    text: 'Polling.....'
+                });
+                node.send({
+                    payload: GetGPIOInfo()
+                });
+                node.status({
+                    fill: 'green',
+                    shape: 'dot',
+                    text: 'common.status.ok'
+                });
+            }, calcRate(node));
+        }
+
+        node.on('input', () => {
+            node.status({
+                fill: 'blue',
+                shape: 'dot',
+                text: 'Polling.....'
+            });
+            node.send({
+                payload: GetGPIOInfo()
+            });
+            node.status({
+                fill: 'green',
+                shape: 'dot',
+                text: 'common.status.ok'
+            });
+        });
+
+        node.on('close', () => {
+            node.status({
+                fill: 'grey',
+                shape: 'ring',
+                text: 'at-gpio.status.closed'
+            });
+            if (timerID) {
+                clearInterval(timerID);
+            }
+            timerID = null;
+        });
+    }
+
+    RED.nodes.registerType('atgpio info', GPIOInfoNode);
+
+    function GPIOInNode(n) {
+        // Create a RED node
+        RED.nodes.createNode(this, n);
+
+        // Store local copies of the node configuration (as defined in the .html)
+        this.pin = Number(n.pin || -1);
+        this.dir = n.dir;
+        this.rate = n.rate;
+        this.rateUnit = n.rateUnit;
+
+        // copy "this" object in case we need it in context of callbacks of other functions.
+        const node = this;
+        let timerID = null;
+
+        node.status({
+            fill: 'blue',
+            shape: 'dot',
+            text: 'Initiating.....'
+        });
+
+        node.on('close', () => {
+            node.status({
+                fill: 'grey',
+                shape: 'ring',
+                text: 'at-gpio.status.closed'
+            });
+            delete pinsInUse[node.pin];
+            if (timerID) {
+                clearInterval(timerID);
+            }
+            timerID = null;
+        });
+
+        if (node.pin !== undefined && node.pin >= 0) {
+            // eslint no-prototype-builtins
+            if (!Object.prototype.hasOwnProperty.call(pinsInUse, node.pin)) {
+                pinsInUse[this.pin] = this.dir;
+            } else if ((pinsInUse[this.pin] !== this.dir)) {
+                const msg = RED._('at-gpio.errors.alreadyset', {
+                    pin: this.pin,
+                    type: pinTypes[pinsInUse[this.pin]]
+                });
+                node.warn(msg);
+                node.status({
+                    fill: 'red',
+                    shape: 'dot',
+                    text: msg
+                });
+                return;
+            }
+
+            if (gpio.getmode(this.pin) !== gpio.INPUT) {
+                try {
+                    gpio.setup(node.pin, gpio.INPUT);
+                } catch (e) {
+                    node.error('GPIOInNode: Please cheack your pin direction!');
+                    node.status({
+                        fill: 'red',
+                        shape: 'dot',
+                        text: 'Please cheack your pin direction!'
+                    });
+                    return;
+                }
+            }
+
+            node.status({
+                fill: 'green',
+                shape: 'dot',
+                text: 'common.status.ok'
+            });
+            if (timerID != null) {
+                clearInterval(timerID);
+                timerID = null;
+            }
+            if (!timerID) {
+                timerID = setInterval(() => {
+                    const val = gpio.read(node.pin);
+                    node.send({
+                        topic: `at-gpio/${node.pin}`,
+                        payload: Number(val)
+                    });
+                }, calcRate(node));
+            }
+        } else {
+            node.warn(`${RED._('at-gpio.errors.invalidpin')}: ${node.pin}`);
+            node.status({
+                fill: 'red',
+                shape: 'dot',
+                text: `${RED._('at-gpio.errors.invalidpin')}: ${node.pin}`
+            });
+            return;
+        }
+    }
+
+    // Register the node by name. This must be called before overriding any of the
+    // Node functions.
+    RED.nodes.registerType('atgpio in', GPIOInNode);
+
+    function GPIOOutNode(n) {
+        // Create a RED node
+        RED.nodes.createNode(this, n);
+
+        // Store local copies of the node configuration (as defined in the .html)
+        this.pin = Number(n.pin || -1);
+        this.dir = n.dir;
+        this.set = n.set || false;
+        this.level = Number(n.level || 0);
+        // copy "this" object in case we need it in context of callbacks of other functions.
+        const node = this;
+
+        function inputlistener(msg) {
+            // eslint no-prototype-builtins
+            if (!(msg && Object.prototype.hasOwnProperty.call(msg, 'payload')))
+                return;
+
+            if (msg.payload == null) {
+                node.status({
+                    fill: 'red',
+                    shape: 'dot',
+                    text: 'payload error'
+                });
+                node.error('GPIOOutNode: Invalid msg.payload!');
+                return;
+            }
+
+            if (node.pin === undefined || node.pin < 0) {
+                return;
+            }
+
+            if (msg.payload === 'true') {
+                msg.payload = true;
+            }
+            if (msg.payload === 'false') {
+                msg.payload = false;
+            }
+            const out = Number(msg.payload);
+
+            if ((out !== gpio.LOW) && (out !== gpio.HIGH)) {
+                node.warn(`${RED._('at-gpio.errors.invalidinput')}: ${out}`);
+                node.status({
+                    fill: 'red',
+                    shape: 'dot',
+                    text: `${RED._('at-gpio.errors.invalidinput')}: ${out}`
+                });
+                return;
+            }
+            if (RED.settings.verbose) {
+                node.log(`out: ${msg.payload}`);
+            }
+            gpio.write(node.pin, out);
+            node.status({
+                fill: 'green',
+                shape: 'dot',
+                text: out
+            });
+        }
+
+        node.status({
+            fill: 'blue',
+            shape: 'dot',
+            text: 'Initiating.....'
+        });
+
+        node.on('close', () => {
+            node.status({
+                fill: 'grey',
+                shape: 'ring',
+                text: 'at-gpio.status.closed'
+            });
+            if (node.pin !== undefined && node.pin >= 0) {
+                delete pinsInUse[node.pin];
+            }
+        });
+
+        if (node.pin !== undefined && node.pin >= 0) {
+            if (!Object.prototype.hasOwnProperty.call(pinsInUse, node.pin)) {
+                pinsInUse[this.pin] = this.dir;
+            } else if ((pinsInUse[this.pin] !== this.dir)) {
+                const msg = RED._('at-gpio.errors.alreadyset', {
+                    pin: this.pin,
+                    type: pinTypes[pinsInUse[this.pin]]
+                });
+                node.warn(msg);
+                node.status({
+                    fill: 'red',
+                    shape: 'dot',
+                    text: msg
+                });
+                return;
+            }
+
+            if (node.set) {
+                if (gpio.getmode(this.pin) !== gpio.OUTPUT) {
+                    try {
+                        gpio.setup(node.pin, gpio.OUTPUT);
+                    } catch (e) {
+                        node.error('GPIOOutNode: Please cheack your pin direction!');
+                        node.status({
+                            fill: 'red',
+                            shape: 'dot',
+                            text: 'Please cheack your pin direction!'
+                        });
+                        return;
+                    }
+                }
+                gpio.write(node.pin, node.level);
+                node.status({
+                    fill: 'green',
+                    shape: 'dot',
+                    text: String(node.level)
+                });
+            } else {
+                if (gpio.getmode(this.pin) !== gpio.OUTPUT) {
+                    try {
+                        gpio.setup(node.pin, gpio.OUTPUT);
+                    } catch (e) {
+                        node.error('GPIOOutNode: Please cheack your pin direction!');
+                        node.status({
+                            fill: 'red',
+                            shape: 'dot',
+                            text: 'Please cheack your pin direction!'
+                        });
+                        return;
+                    }
+                }
+                node.status({
+                    fill: 'green',
+                    shape: 'dot',
+                    text: 'common.status.ok'
+                });
+            }
+            node.on('input', inputlistener);
+        } else {
+            node.warn(`${RED._('at-gpio.errors.invalidpin')}: ${node.pin}`);
+            node.status({
+                fill: 'red',
+                shape: 'dot',
+                text: `${RED._('at-gpio.errors.invalidpin')}: ${node.pin}`
+            });
+            return;
+        }
+    }
+
+    RED.nodes.registerType('atgpio out', GPIOOutNode);
+
+    RED.httpAdmin.get('/at-gpio/count/:id', RED.auth.needsPermission('at-gpio.read'), (req, res) => {
+        res.json(gpioCount);
+    });
+    RED.httpAdmin.get('/at-gpio/pins/:id', RED.auth.needsPermission('at-gpio.read'), (req, res) => {
+        res.json(pinsInUse);
+    });
+};
